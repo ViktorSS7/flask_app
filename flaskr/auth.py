@@ -1,5 +1,3 @@
-import functools
-
 from flask import Blueprint, flash, g, redirect, render_template,\
                   request, session, url_for
 
@@ -23,8 +21,9 @@ def register():
         try:
             user = entities.User(username=username, password=password)
         except ValidationException as err:
-            errors = err.message
-            flash(err.message)
+            errors = err.messages
+            for err in err.messages:
+                flash(err)
 
         if errors is None and user is not None:
             db.execute(
@@ -32,9 +31,9 @@ def register():
                 (user.username, user.password)
             )
             db.commit()
-            return str(user)
+            return redirect(url_for('auth.login'))
 
-        return str(errors)
+    return render_template('register.html')
 
 
 @bp.route('/login', methods=('GET', 'POST'))
@@ -56,37 +55,27 @@ def login():
         if not errors and user.password_validate(password):
             session.clear()
             session['user_id'] = user.id
-            return user.serialize()
+            return redirect(url_for('user.get_me'))
 
-        return str(errors)
+    return render_template('login.html')
 
 
-@bp.route('/me', methods=['GET'])
-def get_me():
-    db = get_db()
+@bp.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('index'))
 
-    if session['user_id']:
-        user = db.execute(
-            'SELECT * FROM user WHERE id = ?', (session['user_id'],)
+
+@bp.before_app_request
+def load_logged_user():
+    user_id = session.get('user_id')
+
+    if user_id:
+        user = get_db().execute(
+            'SELECT * FROM user WHERE id = ?',
+            (user_id,)
         ).fetchone()
-
-        if user is not None:
-            user = entities.User(**user)
-
-            return user.serialize()
-
-
-@bp.route('/list', methods=['GET'])
-def get_users_list():
-    db = get_db()
-
-    users = db.execute(
-        'SELECT * FROM user'
-    ).fetchall()
-
-    context = list()
-    for user in users:
         user = entities.User(**user)
-        context.append(user.serialize())
-
-    return {'result': context}
+        g.user = user.serialize()
+    else:
+        g.user = None

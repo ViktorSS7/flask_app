@@ -72,11 +72,18 @@ class User(Entity):
 
     def set_password(self, value):
         return value
+        # todo: нормальное хеширование
         # return generate_password_hash(value)
 
     def password_validate(self, password):
         return self.password == password
+        # todo: нормальное хеширование
         # return check_password_hash(self.password, password)
+
+    def change_password(self, old_password, new_password, repeat_password):
+        if self.password_validate(old_password) and\
+           new_password == repeat_password:
+            self.password = new_password
 
     def __str__(self):
         return self.username
