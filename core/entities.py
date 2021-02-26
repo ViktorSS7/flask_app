@@ -1,7 +1,9 @@
 # from werkzeug.security import generate_password_hash, check_password_hash
 
+from random import randint
+
 from core.errors import MessageException, ValidationException
-from core.validate import validate_model, TYPES, REQUIRED
+from core.validate import validate_model, TYPES, REQUIRED, COLLECTION
 from core.localization import _
 
 
@@ -84,18 +86,26 @@ class User(Entity):
         # return check_password_hash(self.password, password)
 
     def change_password(self, old_password, new_password, repeat_password):
-        if self.password_validate(old_password) and\
-           new_password == repeat_password:
-            self.password = new_password
+        if not self.password_validate(old_password):
+            raise MessageException(_('Old password is invalid'))
+        if not new_password == repeat_password:
+            raise MessageException(
+                _('New password is not equal with repeat password')
+            )
+        self.password = new_password
 
-    def buy_product(self, product):
-        if not self.coins or self.coins < product.price:
+    def buy_cart(self, cart):
+        if not cart.owner == self:
+            raise MessageException(_('This cart not owner by user'))
+        if not self.coins or self.coins < cart.cart_sum:
             raise MessageException(_('User have not enough coins'))
 
-        price = product.price
-        product.owner.coins += price
+        price = cart.cart_sum
         self.coins -= price
-        product.owner = self
+        for product in cart.products:
+            price = product.price
+            product.owner.coins += price
+            product.owner = self
 
     def __str__(self):
         return self.username
@@ -113,3 +123,27 @@ class Product(Entity):
 
     def __str__(self):
         return self.title
+
+
+class Cart(Entity):
+    """Cart instance"""
+
+    rules = {
+        'hash': (REQUIRED, 'int', ),
+        'owner': (REQUIRED, User, ),
+        'products': (COLLECTION, Product, ),
+        'cart_sum': ('int', )
+    }
+
+    def __init__(self, **kwargs):
+        if 'hash' not in kwargs:
+            kwargs['hash'] = randint(11111, 99999)
+
+        super().__init__(**kwargs)
+
+    def set_products(self, products):
+        sum = 0
+        for product in products:
+            sum += product.price
+        self.cart_sum = sum
+        return products

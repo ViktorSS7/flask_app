@@ -1,5 +1,25 @@
 import unittest
 from core import entities, errors
+from random import randint
+
+
+def create_user(username='testuser', password='testpass', coins=10, ):
+    return entities.User(username=username, password=password, coins=coins)
+
+
+def create_product(owner=create_user(), title='TestProduct',
+                   price=randint(1, 3)):
+    return entities.Product(owner=owner, title=title, price=price)
+
+
+def create_cart(owner=create_user(),
+                products=None):
+    if products is None:
+        products = [create_product(title='TestProduct1',
+                                   owner=create_user('Owner1')),
+                    create_product(title='TestProduct2',
+                                   owner=create_user('Owner2'))]
+    return entities.Cart(owner=owner, products=products)
 
 
 class TestUser(unittest.TestCase):
@@ -23,59 +43,46 @@ class TestUser(unittest.TestCase):
         with self.assertRaises(errors.ValidationException):
             entities.User(**payload)
 
-    def test_successful_buy_product(self):
-        product_owner_payload = {
-            'username': 'ProductOwner',
-            'password': 'testpass',
-            'coins': 1
-        }
-        product_owner = entities.User(**product_owner_payload)
+    def test_change_password(self):
+        """Test successful changing user's password"""
+        old_password = 'oldpass'
+        new_password = 'newpass'
+        user = create_user(password=old_password)
 
-        product_payload = {
-            'owner': product_owner,
-            'title': 'Test product',
-            'price': 3
-        }
-        product = entities.Product(**product_payload)
+        user.change_password(old_password, new_password, new_password)
 
-        payload = {
-            'username': 'testuser',
-            'password': 'testpass',
-            'coins': 4
-        }
-        user = entities.User(**payload)
+        self.assertTrue(user.password_validate(new_password))
 
-        user.buy_product(product)
-
-        self.assertEqual(product.owner, user)
-        self.assertEqual(user.coins, payload['coins'] - product.price)
-        self.assertEqual(product_owner.coins,
-                         product_owner_payload['coins'] + product.price)
-
-    def test_error_not_enough_money_buy_product(self):
-        product_owner_payload = {
-            'username': 'ProductOwner',
-            'password': 'testpass',
-            'coins': 1
-        }
-        product_owner = entities.User(**product_owner_payload)
-
-        product_payload = {
-            'owner': product_owner,
-            'title': 'Test product',
-            'price': 3
-        }
-        product = entities.Product(**product_payload)
-
-        payload = {
-            'username': 'testuser',
-            'password': 'testpass',
-            'coins': 2
-        }
-        user = entities.User(**payload)
+    def test_change_password_with_error(self):
+        """Test change password with not equal new and repeat pass"""
+        old_password = 'oldpass'
+        new_password = 'newpass'
+        repeat_password = 'another_pass'
+        user = create_user(password=old_password)
 
         with self.assertRaises(errors.MessageException):
-            user.buy_product(product)
+            user.change_password(old_password, new_password, repeat_password)
+
+    def test_successful_buy_cart(self):
+        user = create_user('User1')
+        cart = create_cart(owner=user)
+        user_coins = user.coins
+
+        owner1 = cart.products[0].owner
+        owner1_coins = owner1.coins
+        owner2 = cart.products[1].owner
+        owner2_coins = owner2.coins
+
+        user.buy_cart(cart)
+
+        self.assertEqual(
+            user.coins,
+            user_coins - (cart.products[0].price + cart.products[1].price)
+        )
+        self.assertEqual(cart.products[0].owner, user)
+        self.assertEqual(cart.products[1].owner, user)
+        self.assertEqual(owner1.coins, owner1_coins + cart.products[0].price)
+        self.assertEqual(owner2.coins, owner2_coins + cart.products[1].price)
 
 
 class TestProduct(unittest.TestCase):
@@ -106,3 +113,32 @@ class TestProduct(unittest.TestCase):
 
         with self.assertRaises(errors.ValidationException):
             entities.Product(**payload)
+
+
+class TestCart(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.product1 = create_product()
+        self.product2 = create_product(owner=create_user('testuser2'),
+                                       title='TestProduct2')
+
+    def test_create(self):
+        """Test successful cart create"""
+        payload = {
+            'owner': create_user(username='CartOwner'),
+            'products': {self.product1, self.product2}
+        }
+
+        cart = entities.Cart(**payload)
+
+        self.assertTrue(isinstance(cart.hash, int))
+        self.assertEqual(cart.owner.username, payload['owner'].username)
+        self.assertEqual(len(cart.products), 2)
+        self.assertEqual(cart.cart_sum,
+                         self.product1.price + self.product2.price)
+
+    def test_create_error(self):
+        """Test create cart without owner"""
+
+        with self.assertRaises(errors.MessageException):
+            entities.Cart(products=[self.product2])
