@@ -1,8 +1,11 @@
 from core.localization import _
 
 
-class ValidationException(Exception):
+class MessageException(Exception):
     def __init__(self, *args, **kwargs):
         self.messages = args
         self.obj = kwargs
 
+
+class ValidationException(MessageException):
+    pass

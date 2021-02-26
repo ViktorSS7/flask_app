@@ -1,22 +1,19 @@
-from werkzeug.security import generate_password_hash, check_password_hash
+# from werkzeug.security import generate_password_hash, check_password_hash
 
-from core.errors import ValidationException
-from core.validate import validate_model, TYPES
+from core.errors import MessageException, ValidationException
+from core.validate import validate_model, TYPES, REQUIRED
+from core.localization import _
 
 
 class Entity:
     """Model interface"""
     rules = {}
     __validation_mode = False
-    attributes = {}
 
     def serialize(self):
         result = {}
         for attribute in self.attributes:
             value = self.attributes[attribute]
-
-            if isinstance(value, Entity):
-                value = value.serialize()
 
             if attribute in self.rules:
                 rules = self.rules[attribute]
@@ -24,16 +21,21 @@ class Entity:
                 if 'hidden' in rules:
                     continue
 
-                # Приветсти к типу, который указан в rules
                 for rule in rules:
+                    # Приветсти к типу, который указан в rules
                     if rule in TYPES:
                         value = TYPES[rule](value)
                         break
+
+            if isinstance(value, Entity):
+                value = value.serialize()
 
             result[attribute] = value
         return result
 
     def __init__(self, **kwargs):
+        self.attributes = {}
+
         for key in kwargs:
             setattr(self, key, kwargs[key])
 
@@ -66,8 +68,9 @@ class User(Entity):
     """User instance"""
 
     rules = {
-        'username': ('required', 'str'),
-        'password': ('required', 'str', 'hidden')
+        'username': (REQUIRED, 'str'),
+        'password': (REQUIRED, 'str', 'hidden'),
+        'coins': ('int', )
     }
 
     def set_password(self, value):
@@ -85,5 +88,28 @@ class User(Entity):
            new_password == repeat_password:
             self.password = new_password
 
+    def buy_product(self, product):
+        if not self.coins or self.coins < product.price:
+            raise MessageException(_('User have not enough coins'))
+
+        price = product.price
+        product.owner.coins += price
+        self.coins -= price
+        product.owner = self
+
     def __str__(self):
         return self.username
+
+
+class Product(Entity):
+    """Product instance"""
+
+    rules = {
+        'owner': ('required', User),
+        'created': ('readonly', ),
+        'title': ('required', 'str',),
+        'price': ('required', 'int', )
+    }
+
+    def __str__(self):
+        return self.title
