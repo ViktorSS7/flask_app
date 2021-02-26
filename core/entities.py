@@ -1,7 +1,7 @@
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from core.errors import ValidationException
-from core.validate import validate_model
+from core.validate import validate_model, TYPES
 
 
 class Entity:
@@ -9,6 +9,29 @@ class Entity:
     rules = {}
     __validation_mode = False
     attributes = {}
+
+    def serialize(self):
+        result = {}
+        for attribute in self.attributes:
+            value = self.attributes[attribute]
+
+            if isinstance(value, Entity):
+                value = value.serialize()
+
+            if attribute in self.rules:
+                rules = self.rules[attribute]
+                # Не добавлять в сериализированый объект, если скрыт
+                if 'hidden' in rules:
+                    continue
+
+                # Приветсти к типу, который указан в rules
+                for rule in rules:
+                    if rule in TYPES:
+                        value = TYPES[rule](value)
+                        break
+
+            result[attribute] = value
+        return result
 
     def __init__(self, **kwargs):
         for key in kwargs:
@@ -44,7 +67,7 @@ class User(Entity):
 
     rules = {
         'username': ('required', 'str'),
-        'password': ('required', 'str')
+        'password': ('required', 'str', 'hidden')
     }
 
     def set_password(self, value):

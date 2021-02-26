@@ -56,7 +56,7 @@ def login():
         if not errors and user.password_validate(password):
             session.clear()
             session['user_id'] = user.id
-            return str(user)
+            return user.serialize()
 
         return str(errors)
 
@@ -73,6 +73,20 @@ def get_me():
         if user is not None:
             user = entities.User(**user)
 
-            return str({
-                'username': user.username,
-            })
+            return user.serialize()
+
+
+@bp.route('/list', methods=['GET'])
+def get_users_list():
+    db = get_db()
+
+    users = db.execute(
+        'SELECT * FROM user'
+    ).fetchall()
+
+    context = list()
+    for user in users:
+        user = entities.User(**user)
+        context.append(user.serialize())
+
+    return {'result': context}
