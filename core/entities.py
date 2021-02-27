@@ -44,12 +44,12 @@ class Entity:
         self.validate()
 
     def __setattr__(self, key, value):
-        if key in self.rules:
-            if hasattr(self, self._get_key_mutator(key)):
-                value = getattr(self, self._get_key_mutator(key))(value)
-            self.attributes[key] = value
-        else:
+        if key == 'attributes':
             super().__setattr__(key, value)
+            return
+        if hasattr(self, self._get_key_mutator(key)):
+            value = getattr(self, self._get_key_mutator(key))(value)
+        self.attributes[key] = value
 
     def __getattr__(self, item):
         if item in self.attributes:
@@ -74,6 +74,12 @@ class User(Entity):
         'password': (REQUIRED, 'str', 'hidden'),
         'coins': ('int', )
     }
+
+    def __init__(self, **kwargs):
+        if 'coins' not in kwargs:
+            kwargs['coins'] = 0
+
+        super().__init__(**kwargs)
 
     def set_password(self, value):
         return value
@@ -120,6 +126,14 @@ class Product(Entity):
         'title': ('required', 'str',),
         'price': ('required', 'int', )
     }
+
+    def edit(self, editor, **kwargs):
+        if not editor or not self.owner.id == editor.id:
+            raise MessageException(
+                _('User has not permission for edit this product'))
+        for key in kwargs:
+            setattr(self, key, kwargs[key])
+        self.validate()
 
     def __str__(self):
         return self.title

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+
+{% block header %}
+    <h1>{% block title %}{{ product.title }}{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+    <form method="post">
+        <label for="title">Title</label>
+        <input name="title" id="title" required value="{{ product.title }}">
+        <label for="price">Price</label>
+        <input type="number" name="price" id="price" required value="{{ product.price }}">
+        <label for="owner_id">Owner</label>
+        <select name="owner_id" id="owner_id">
+            {% for user in users_list %}
+                <option {% if user.value == product.owner_id %}selected="selected"{% endif %} value="{{ user.value }}">{{ user.label }}</option>
+            {% endfor %}
+        </select>
+        <input type="submit" value="Save">
+    </form>
+{% endblock %}

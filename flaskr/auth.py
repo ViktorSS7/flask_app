@@ -27,8 +27,8 @@ def register():
 
         if errors is None and user is not None:
             db.execute(
-                'INSERT INTO user (username, password) VALUES (?, ?)',
-                (user.username, user.password)
+                'INSERT INTO user (username, password, coins) VALUES (?, ?, ?)',
+                (user.username, user.password, user.coins)
             )
             db.commit()
             return redirect(url_for('auth.login'))
@@ -63,19 +63,19 @@ def login():
 @bp.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('index'))
+    return redirect(url_for('auth.login'))
 
 
 @bp.before_app_request
 def load_logged_user():
     user_id = session.get('user_id')
+    user = None
 
     if user_id:
         user = get_db().execute(
             'SELECT * FROM user WHERE id = ?',
             (user_id,)
         ).fetchone()
-        user = entities.User(**user)
-        g.user = user.serialize()
-    else:
-        g.user = None
+        if user:
+            user = entities.User(**user)
+    g.user = user
