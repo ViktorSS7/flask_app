@@ -90,7 +90,8 @@ class TestProduct(unittest.TestCase):
     def setUp(self) -> None:
         self.user = entities.User(
             username='testuser',
-            password='testpass'
+            password='testpass',
+            id=1
         )
 
     def test_successful_create(self):

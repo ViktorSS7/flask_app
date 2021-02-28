@@ -44,12 +44,12 @@ class Entity:
         self.validate()
 
     def __setattr__(self, key, value):
-        if key in self.rules:
-            if hasattr(self, self._get_key_mutator(key)):
-                value = getattr(self, self._get_key_mutator(key))(value)
-            self.attributes[key] = value
-        else:
+        if key == 'attributes':
             super().__setattr__(key, value)
+            return
+        if hasattr(self, self._get_key_mutator(key)):
+            value = getattr(self, self._get_key_mutator(key))(value)
+        self.attributes[key] = value
 
     def __getattr__(self, item):
         if item in self.attributes:
