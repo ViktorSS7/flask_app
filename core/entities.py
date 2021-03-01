@@ -43,6 +43,12 @@ class Entity:
 
         self.validate()
 
+    def __call__(self, *args, **kwargs):
+        for key in kwargs:
+            setattr(self, key, kwargs[key])
+
+        self.validate()
+
     def __setattr__(self, key, value):
         if key == 'attributes':
             super().__setattr__(key, value)
@@ -74,6 +80,12 @@ class User(Entity):
         'password': (REQUIRED, 'str', 'hidden'),
         'coins': ('int', )
     }
+
+    def __init__(self, **kwargs):
+        if 'coins' not in kwargs:
+            kwargs['coins'] = 0
+
+        super().__init__(**kwargs)
 
     def set_password(self, value):
         return value
@@ -120,6 +132,14 @@ class Product(Entity):
         'title': ('required', 'str',),
         'price': ('required', 'int', )
     }
+
+    def edit(self, editor, **kwargs):
+        if not editor or not self.owner.id == editor.id:
+            raise MessageException(
+                _('User has not permission for edit this product'))
+        for key in kwargs:
+            setattr(self, key, kwargs[key])
+        self.validate()
 
     def __str__(self):
         return self.title

@@ -115,6 +115,21 @@ class TestProduct(unittest.TestCase):
         with self.assertRaises(errors.ValidationException):
             entities.Product(**payload)
 
+    def test_successful_edit(self):
+        product = create_product(owner=self.user)
+        new_owner = create_user(username='NewOwner')
+        payload = {
+            'title': 'New Title',
+            'price': randint(2, 7),
+            'owner': new_owner
+        }
+
+        product.edit(**payload, editor=self.user)
+
+        self.assertEqual(product.title, payload['title'])
+        self.assertEqual(product.price, payload['price'])
+        self.assertEqual(product.owner.username, new_owner.username)
+
 
 class TestCart(unittest.TestCase):
 
