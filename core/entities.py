@@ -10,7 +10,6 @@ from core.localization import _
 class Entity:
     """Model interface"""
     rules = {}
-    __validation_mode = False
 
     def serialize(self):
         result = {}

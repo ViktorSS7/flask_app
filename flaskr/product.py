@@ -2,6 +2,7 @@ from flask import Blueprint, flash, g, redirect, render_template, \
     request, session, url_for
 
 from flaskr.db import get_db
+from flaskr import service
 
 from core import entities
 from core.errors import ValidationException, MessageException
@@ -14,18 +15,9 @@ def product_list():
     db = get_db()
     context = {}
 
-    products = db.execute(
-        'SELECT * FROM product'
-    ).fetchall()
-
-    context['products'] = []
+    products = service.build_products_list_by_ids_list()
+    context['products'] = list()
     for product in products:
-        user = db.execute(
-            'SELECT * FROM user WHERE id = ?',
-            (product['owner_id'],)
-        ).fetchone()
-        user = entities.User(**user)
-        product = entities.Product(**product, owner=user)
         context['products'].append({
             **product.serialize(),
             'url': url_for('product.product', product_id=product.id)
@@ -40,32 +32,16 @@ def product(product_id):
     errors = []
     context = {}
 
-    product = db.execute(
-        'SELECT * FROM product WHERE id = ?',
-        (product_id,)
-    ).fetchone()
+    product = service.build_product_by_id(product_id)
 
-    user = db.execute(
-        'SELECT * FROM user WHERE id = ?',
-        (product['owner_id'],)
-    ).fetchone()
-
-    if not product or not user:
+    if not product:
         return render_template(url_for('product.product_list'))
-
-    user = entities.User(**user)
-
-    product = entities.Product(**product, owner=user)
 
     if request.method == 'POST':
         user_id = session.get('user_id')
         editor = None
         if user_id:
-            editor = db.execute(
-                'SELECT * FROM user WHERE id = ?',
-                (user_id,)
-            ).fetchone()
-            editor = entities.User(**editor)
+            editor = service.build_user_by_id(user_id)
 
         if user_id == product.owner.id:
             try:
@@ -74,46 +50,31 @@ def product(product_id):
                 for m in err.messages:
                     flash(m)
 
-            db.execute(
-                'UPDATE product SET title = ?, price = ?, owner_id = ?',
-                (product.title, product.price, product.owner.id)
-            )
+            service.store_product(product)
         else:
-            cart = db.execute(
-                'SELECT * FROM cart WHERE owner_id = ?',
-                (user_id,)
-            ).fetchone()
-            products = list()
-            if cart:
-                cart_products = db.execute(
-                    'SELECT * FROM product WHERE id IN \
-                    (SELECT product_id FROM cart_products WHERE cart_id = ?)',
-                    (cart['id'],)
-                ).fetchall()
-                for product in cart_products:
-                    products.append(entities.Product(**product))
-            try:
-                cart = entities.Cart(owner=editor, products=products)
-            except MessageException as err:
-                for e in err.messages:
-                    flash(e)
-                    errors.append(e)
-
-            if not errors:
-                cart.products.append(product)
+            cart = service.build_cart_by_owner(editor)
+            if not cart:
+                cart = entities.Cart(owner=editor)
+            cart.products.append(product)
 
             if not hasattr(cart, 'id'):
-                new_cart = db.execute(
+                new_cart_id = db.execute(
                     'INSERT INTO cart (owner_id, hash) VALUES (?, ?)',
                     (cart.owner.id, cart.hash)
-                ).fetchone()
-                cart(**new_cart)
-            # db.execute(
-            #     'DELETE FROM cart_products WHERE cart_id = ?',
-            #     (cart.)
-            # )
-            # for prod in cart.products:
+                ).lastrowid
+                cart(id=new_cart_id)
 
+            db.execute(
+                'DELETE FROM cart_products WHERE cart_id = ?',
+                (cart.id,)
+            )
+            for prod in cart.products:
+                db.execute(
+                    'INSERT INTO cart_products (cart_id, product_id) VALUES (?, ?)',
+                    (cart.id, prod.id)
+                )
+
+    db.commit()
 
     context['product'] = product.serialize()
 
@@ -129,3 +90,14 @@ def product(product_id):
         })
 
     return render_template('product/product.html', **context)
+
+
+@bp.before_app_request
+def load_user_cart():
+    if g.user:
+        user = g.user
+    else:
+        user = session.get('user_id')
+
+    if user:
+        g.cart = service.build_cart_by_owner(user)
