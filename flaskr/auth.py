@@ -1,7 +1,7 @@
 from flask import Blueprint, flash, g, redirect, render_template,\
                   request, session, url_for
 
-from flaskr.db import get_db
+from flaskr.service import service, user as s_user
 
 from core import entities
 from core.errors import ValidationException
@@ -15,7 +15,6 @@ def register():
         user = None
         username = request.form['username']
         password = request.form['password']
-        db = get_db()
         errors = None
 
         try:
@@ -26,11 +25,8 @@ def register():
                 flash(err)
 
         if errors is None and user is not None:
-            db.execute(
-                'INSERT INTO user (username, password, coins) VALUES (?, ?, ?)',
-                (user.username, user.password, user.coins)
-            )
-            db.commit()
+            s_user.store_user(user)
+
             return redirect(url_for('auth.login'))
 
     return render_template('register.html')
@@ -41,11 +37,10 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        db = get_db()
         errors = []
-        user = db.execute(
+        user = service.db_execute_one(
             'SELECT * FROM user WHERE username = ?', (username,)
-        ).fetchone()
+        )
 
         if user is None:
             errors.append('Incorrect username.')
@@ -72,10 +67,5 @@ def load_logged_user():
     user = None
 
     if user_id:
-        user = get_db().execute(
-            'SELECT * FROM user WHERE id = ?',
-            (user_id,)
-        ).fetchone()
-        if user:
-            user = entities.User(**user)
+        user = s_user.build_user_by_id(user_id)
     g.user = user
