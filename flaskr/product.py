@@ -1,8 +1,8 @@
 from flask import Blueprint, flash, g, redirect, render_template, \
     request, session, url_for
 
-from flaskr.db import get_db
-from flaskr import service
+from flaskr.service import service, product as s_product, user as s_user,\
+    cart as s_cart
 
 from core import entities
 from core.errors import ValidationException, MessageException
@@ -12,10 +12,9 @@ bp = Blueprint('product', __name__, url_prefix='/product/')
 
 @bp.route('/', methods=('GET',))
 def product_list():
-    db = get_db()
     context = {}
 
-    products = service.build_products_list_by_ids_list()
+    products = s_product.build_products_list_by_ids_list()
     context['products'] = list()
     for product in products:
         context['products'].append({
@@ -28,11 +27,10 @@ def product_list():
 
 @bp.route('/<int:product_id>', methods=('GET', 'POST'))
 def product(product_id):
-    db = get_db()
     errors = []
     context = {}
 
-    product = service.build_product_by_id(product_id)
+    product = s_product.build_product_by_id(product_id)
 
     if not product:
         return render_template(url_for('product.product_list'))
@@ -41,7 +39,7 @@ def product(product_id):
         user_id = session.get('user_id')
         editor = None
         if user_id:
-            editor = service.build_user_by_id(user_id)
+            editor = s_user.build_user_by_id(user_id)
 
         if user_id == product.owner.id:
             try:
@@ -50,7 +48,7 @@ def product(product_id):
                 for m in err.messages:
                     flash(m)
 
-            service.store_product(product)
+            s_product.store_product(product)
         else:
             cart = service.build_cart_by_owner(editor)
             if not cart:
@@ -58,29 +56,27 @@ def product(product_id):
             cart.products.append(product)
 
             if not hasattr(cart, 'id'):
-                new_cart_id = db.execute(
+                new_cart_id = service.db_update(
                     'INSERT INTO cart (owner_id, hash) VALUES (?, ?)',
                     (cart.owner.id, cart.hash)
-                ).lastrowid
+                )
                 cart(id=new_cart_id)
 
-            db.execute(
+            service.db_update(
                 'DELETE FROM cart_products WHERE cart_id = ?',
                 (cart.id,)
             )
             for prod in cart.products:
-                db.execute(
+                service.db_update(
                     'INSERT INTO cart_products (cart_id, product_id) VALUES (?, ?)',
                     (cart.id, prod.id)
                 )
 
-    db.commit()
-
     context['product'] = product.serialize()
 
-    users_list = db.execute(
+    users_list = service.db_execute_all(
         'SELECT id, username FROM user'
-    ).fetchall()
+    )
 
     context['users_list'] = list()
     for user in users_list:
@@ -100,4 +96,4 @@ def load_user_cart():
         user = session.get('user_id')
 
     if user:
-        g.cart = service.build_cart_by_owner(user)
+        g.cart = s_cart.build_cart_by_owner(user)
