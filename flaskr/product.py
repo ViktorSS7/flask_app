@@ -27,30 +27,39 @@ def product_list():
 
 @bp.route('/<int:product_id>', methods=('GET', 'POST'))
 def product(product_id):
+    user_id = session.get('user_id')
     errors = []
     context = {}
+    our_product = False
 
     product = s_product.build_product_by_id(product_id)
 
     if not product:
-        return render_template(url_for('product.product_list'))
+        return redirect(url_for('product.product_list'))
+
+    if user_id == product.owner_id:
+        our_product = True
 
     if request.method == 'POST':
-        user_id = session.get('user_id')
         editor = None
-        if user_id:
+        if our_product:
+            editor = product.owner
+
+        if not editor:
             editor = s_user.build_user_by_id(user_id)
 
-        if user_id == product.owner.id:
+        if our_product:
+            new_owner_id = request.form['owner_id']
+            new_owner = s_user.build_user_by_id(new_owner_id)
             try:
-                product.edit(editor=editor, **request.form)
+                product.edit(editor=editor, owner=new_owner, **request.form)
             except MessageException as err:
                 for m in err.messages:
                     flash(m)
 
             s_product.store_product(product)
         else:
-            cart = service.build_cart_by_owner(editor)
+            cart = s_cart.build_cart_by_owner(editor)
             if not cart:
                 cart = entities.Cart(owner=editor)
             cart.products.append(product)

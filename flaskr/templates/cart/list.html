@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block header %}
+    <h1>{% block title %}Cart{% endblock %}</h1>
+{% endblock %}
+
+{% block content %}
+    <ul>
+        {% for product in cart['products'] %}
+            {% set product_id = product['id'] %}
+            <li>
+                {{ product.title }} - Price: {{ product.price }}
+                <a href="{{ url_for('cart.remove_product', product_id=product_id) }}">Remove</a>
+            </li>
+        {% endfor %}
+    </ul>
+{% endblock %}

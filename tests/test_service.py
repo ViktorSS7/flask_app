@@ -1,5 +1,5 @@
 from flaskr.service import service, user as service_user,\
-    product as service_product
+    product as service_product, cart as service_cart
 from flaskr.db import get_db
 
 from core import entities
@@ -194,3 +194,71 @@ def test_build_products_list(app):
             .build_products_list_by_ids_list(ids_list)
         assert len(db_product_list) == len(products)
 
+
+def test_store_cart(app):
+    cart_owner = get_test_user('CartOwner')
+    products = [
+        get_test_product('Product1'),
+        get_test_product('Product2'),
+        get_test_product('Product3')
+    ]
+    cart = entities.Cart(owner=cart_owner, products=products)
+    with app.app_context():
+        owner_id = service_user.store_user(cart_owner)
+        cart.owner_id = owner_id
+        products_ids = set()
+        for prod in products:
+            products_ids.add(service_product.store_product(prod))
+        cart_id = service_cart.store_cart(cart)
+        cart_data = service.db_execute_one('SELECT * FROM cart WHERE id = ?', (cart_id,))
+        cart_products_data = service.db_execute_all(
+            'SELECT * FROM cart_products WHERE cart_id = ?', (cart_id, )
+        )
+        assert cart_data['owner_id'] == cart.owner.id
+        assert len(cart_products_data) == len(products)
+        for prod in cart_products_data:
+            assert prod['product_id'] in products_ids
+
+
+def test_build_cart_by_id(app):
+    cart_owner = get_test_user('CartOwner')
+    products = [
+        get_test_product('Product1'),
+        get_test_product('Product2'),
+        get_test_product('Product3')
+    ]
+    cart = entities.Cart(owner=cart_owner, products=products)
+    with app.app_context():
+        owner_id = service_user.store_user(cart_owner)
+        cart.owner_id = owner_id
+        products_ids = set()
+        for prod in products:
+            products_ids.add(service_product.store_product(prod))
+        cart_id = service_cart.store_cart(cart)
+        cart_db = service_cart.build_cart_by_id(cart_id)
+        assert cart_db.owner.id == cart.owner.id
+        assert len(cart_db.products) == len(cart.products)
+        for prod in cart_db.products:
+            assert prod.id in products_ids
+
+
+def test_build_cart_by_owner(app):
+    cart_owner = get_test_user('CartOwner')
+    products = [
+        get_test_product('Product1'),
+        get_test_product('Product2'),
+        get_test_product('Product3')
+    ]
+    cart = entities.Cart(owner=cart_owner, products=products)
+    with app.app_context():
+        owner_id = service_user.store_user(cart_owner)
+        cart.owner_id = owner_id
+        products_ids = set()
+        for prod in products:
+            products_ids.add(service_product.store_product(prod))
+        service_cart.store_cart(cart)
+        cart_db = service_cart.build_cart_by_owner(cart_owner)
+        assert cart_db.owner.id == cart.owner.id
+        assert len(cart_db.products) == len(cart.products)
+        for prod in cart_db.products:
+            assert prod.id in products_ids
